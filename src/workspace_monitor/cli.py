@@ -10,6 +10,7 @@ import subprocess
 import platform
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 import click
 
@@ -26,12 +27,12 @@ class Colors:
     RED = '\033[91m'
     END = '\033[0m'
     BOLD = '\033[1m'
-    
+
     @classmethod
     def enabled(cls) -> bool:
         """Check if colors should be enabled."""
         return sys.stdout.isatty() and platform.system() != 'Windows'
-    
+
     @classmethod
     def get(cls, color: str) -> str:
         """Get color code if enabled, else empty string."""
@@ -68,12 +69,12 @@ def format_status(project: ProjectInfo) -> str:
 def time_ago(dt: Optional[datetime]) -> str:
     """Convert datetime to time ago string."""
     from datetime import datetime
-    
+
     if not dt:
         return "Never"
-    
+
     diff = datetime.now() - dt
-    
+
     if diff.days > 365:
         return f"{diff.days // 365}y ago"
     elif diff.days > 30:
@@ -104,13 +105,13 @@ def cli(ctx: click.Context, data_dir: Optional[str], workspace: Optional[str]) -
 
 @cli.command()
 @click.option('--status', '-s', help='Filter by git status')
-@click.option('--sort', default='last_commit_time', 
+@click.option('--sort', default='last_commit_time',
               type=click.Choice(['name', 'status', 'last_commit_time', 'chats', 'language']),
               help='Sort field')
 @click.option('--search', help='Search projects')
 @click.option('--json', 'as_json', is_flag=True, help='Output as JSON')
 @click.pass_context
-def list(ctx: click.Context, status: Optional[str], sort: str, 
+def list(ctx: click.Context, status: Optional[str], sort: str,
          search: Optional[str], as_json: bool) -> None:
     """List all projects."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
@@ -119,27 +120,27 @@ def list(ctx: click.Context, status: Optional[str], sort: str,
         sort_by=sort,
         search=search
     )
-    
+
     if not projects:
         click.echo(f"{Colors.YELLOW}No projects found{Colors.END}")
         return
-    
+
     if as_json:
         click.echo(json.dumps([p.to_dict() for p in projects], indent=2))
         return
-    
+
     # Table header
     click.echo(f"\n{Colors.BOLD}{'Project':<30} {'Status':<15} {'Branch':<20} {'Language':<12} {'Chats':<6} {'Last Commit':<15}{Colors.END}")
     click.echo("-" * 110)
-    
+
     for p in projects:
         status_color = get_status_color(p.git_status)
         status_text = format_status(p)
         time_str = time_ago(p.last_commit_time)
-        
+
         click.echo(f"{p.name:<30} {status_color}{status_text:<15}{Colors.END} "
                   f"{p.git_branch:<20} {p.language:<12} {p.total_chats:<6} {time_str:<15}")
-    
+
     click.echo(f"\n{Colors.CYAN}Total: {len(projects)} projects{Colors.END}")
 
 
@@ -159,37 +160,37 @@ def scan(ctx: click.Context) -> None:
 def status(ctx: click.Context, project: str) -> None:
     """Show detailed status for a project."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
-    
+
     # Resolve project path
     if not project.startswith("/"):
         project_path = str(dashboard.workspace_root / project)
     else:
         project_path = project
-    
+
     projects = dashboard.get_projects()
     proj = next((p for p in projects if p.path == project_path), None)
-    
+
     if not proj:
         click.echo(f"{Colors.RED}Project not found: {project}{Colors.END}")
         return
-    
+
     click.echo(f"\n{Colors.BOLD}{Colors.HEADER}{proj.name}{Colors.END}")
     click.echo(f"  Path: {proj.path}")
     click.echo(f"  Language: {proj.language}")
     click.echo(f"  Branch: {proj.git_branch}")
     click.echo(f"  Status: {get_status_color(proj.git_status)}{proj.git_status}{Colors.END}")
-    
+
     if proj.git_status == "dirty":
         click.echo(f"  Uncommitted files: {proj.uncommitted_files}")
     elif proj.git_status == "ahead":
         click.echo(f"  Commits ahead: {proj.commits_ahead}")
     elif proj.git_status == "behind":
         click.echo(f"  Commits behind: {proj.commits_behind}")
-    
+
     click.echo(f"  Last commit: {proj.last_commit or 'N/A'}")
     click.echo(f"  Total chats: {proj.total_chats}")
     click.echo(f"  Windsurf active: {'Yes' if proj.is_windsurf_open else 'No'}")
-    
+
     # Show recent chats
     chats = dashboard.get_chats(project_path=proj.path, limit=5)
     if chats:
@@ -206,23 +207,23 @@ def stats(ctx: click.Context, as_json: bool) -> None:
     """Show overall statistics."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
     stats = dashboard.get_stats()
-    
+
     if as_json:
         click.echo(json.dumps(stats, indent=2))
         return
-    
+
     click.echo(f"\n{Colors.BOLD}{Colors.HEADER}Workspace Statistics{Colors.END}\n")
-    
+
     click.echo(f"  Total Projects: {Colors.GREEN}{stats['total_projects']}{Colors.END}")
     click.echo(f"  Active Sessions: {Colors.CYAN}{stats['active_sessions']}{Colors.END}")
     click.echo(f"  Chats Today: {Colors.YELLOW}{stats['chats_today']}{Colors.END}")
     click.echo(f"  Total Chats: {stats['total_chats']}")
-    
+
     click.echo(f"\n{Colors.BOLD}Status Distribution:{Colors.END}")
     for status, count in sorted(stats.get('status_counts', {}).items(), key=lambda x: -x[1]):
         color = get_status_color(status)
         click.echo(f"  {color}{status:<12}{Colors.END}: {count}")
-    
+
     click.echo(f"\n{Colors.BOLD}Languages:{Colors.END}")
     for lang, count in sorted(stats.get('languages', {}).items(), key=lambda x: -x[1])[:10]:
         click.echo(f"  {lang:<15}: {count}")
@@ -235,13 +236,13 @@ def chats(ctx: click.Context, limit: int) -> None:
     """Show recent chats."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
     chats_list = dashboard.get_chats(limit=limit)
-    
+
     if not chats_list:
         click.echo(f"{Colors.YELLOW}No chats recorded{Colors.END}")
         return
-    
+
     click.echo(f"\n{Colors.BOLD}{Colors.HEADER}Recent Chats{Colors.END}\n")
-    
+
     for chat in chats_list:
         project_name = Path(chat.project_path).name
         click.echo(f"  {Colors.CYAN}{chat.timestamp.strftime('%Y-%m-%d %H:%M')}{Colors.END} "
@@ -285,13 +286,13 @@ def search(ctx: click.Context, query: str) -> None:
     """Search projects."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
     projects = dashboard.get_projects(search=query)
-    
+
     if not projects:
         click.echo(f"{Colors.YELLOW}No projects matching '{query}'{Colors.END}")
         return
-    
+
     click.echo(f"\n{Colors.BOLD}Found {len(projects)} projects matching '{query}':{Colors.END}\n")
-    
+
     for p in projects:
         click.echo(f"  {Colors.CYAN}{p.name}{Colors.END} ({p.language}) - {p.git_status}")
         click.echo(f"    {p.path}")
@@ -304,14 +305,14 @@ def git_command(ctx: click.Context, git_args: tuple) -> None:
     """Run git command across all projects."""
     dashboard: WorkspaceDashboard = ctx.obj['dashboard']
     projects = dashboard.get_projects()
-    
+
     if not projects:
         click.echo(f"{Colors.YELLOW}No projects found{Colors.END}")
         return
-    
+
     cmd = " ".join(git_args)
     click.echo(f"{Colors.CYAN}Running 'git {cmd}' across {len(projects)} projects...{Colors.END}\n")
-    
+
     for p in projects:
         try:
             result = subprocess.run(
@@ -320,7 +321,7 @@ def git_command(ctx: click.Context, git_args: tuple) -> None:
                 text=True,
                 timeout=10
             )
-            
+
             if result.returncode == 0 and result.stdout.strip():
                 click.echo(f"{Colors.BOLD}{p.name}:{Colors.END}")
                 click.echo(result.stdout)
@@ -338,7 +339,7 @@ def open_project(project: str) -> None:
         project_path = str(Path.home() / "workspace" / project)
     else:
         project_path = project
-    
+
     # Try windsurf first
     for cmd in ['windsurf', 'code']:
         try:
@@ -346,7 +347,7 @@ def open_project(project: str) -> None:
             return
         except FileNotFoundError:
             continue
-    
+
     click.echo(f"{Colors.RED}Could not find windsurf or code command{Colors.END}")
 
 

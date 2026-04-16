@@ -2,6 +2,16 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# UV dependency groups for fast Python package management
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
 [project]
 name = "workspace-monitor"
 version = "1.0.0"
@@ -32,7 +42,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Tools",
     "Topic :: Utilities",
 ]
 dependencies = [

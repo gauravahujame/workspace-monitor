@@ -19,10 +19,32 @@ A comprehensive system-wide dashboard for monitoring all git repositories under 
 
 ## Installation
 
-### From PyPI (Recommended)
+### Quick Install (One-Click)
 
 ```bash
-pip install workspace-monitor
+curl -fsSL https://raw.githubusercontent.com/gauravahujame/workspace-monitor/main/install.sh | sh
+```
+
+### With UV (Recommended)
+
+[UV](https://github.com/astral-sh/uv) is a fast Python package installer (10-100x faster than pip).
+
+```bash
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install
+git clone https://github.com/gauravahujame/workspace-monitor.git
+cd workspace-monitor
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e ".[web]"
+```
+
+### With pip (Traditional)
+
+```bash
+pip install workspace-monitor[web]
 ```
 
 ### From Source
@@ -38,11 +60,11 @@ pip install -e ".[web]"
 On macOS, the data directory is automatically set to `~/Library/Application Support/workspace-monitor/` following macOS conventions.
 
 ```bash
-# Install with Homebrew (optional)
-brew install workspace-monitor
+# Install with UV (recommended)
+uv pip install workspace-monitor[web]
 
-# Or via pip
-pip install workspace-monitor
+# Or with Homebrew
+brew install workspace-monitor
 ```
 
 ## Quick Start
@@ -66,31 +88,33 @@ Add to `~/.codeium/windsurf/hooks.json`:
   "hooks": {
     "post_cascade_response_with_transcript": [
       {
-        "command": "python3 -m workspace_monitor.hooks.processor",
+        "command": "~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor",
         "show_output": false
       }
     ],
     "post_write_code": [
       {
-        "command": "python3 -m workspace_monitor.hooks.processor",
+        "command": "~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor",
         "show_output": false
       }
     ],
     "pre_run_command": [
       {
-        "command": "python3 -m workspace_monitor.hooks.processor",
+        "command": "~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor",
         "show_output": false
       }
     ],
     "post_run_command": [
       {
-        "command": "python3 -m workspace_monitor.hooks.processor",
+        "command": "~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor",
         "show_output": false
       }
     ]
   }
 }
 ```
+
+**Note**: If you installed from source or used a different venv location, adjust the path accordingly.
 
 ### 3. Scan Your Projects
 
@@ -245,8 +269,13 @@ wsd --data-dir /path/to/data stats
 git clone https://github.com/gauravahujame/workspace-monitor.git
 cd workspace-monitor
 
-# Install dev dependencies
-pip install -e ".[dev,web]"
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dev dependencies with UV
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e ".[dev,web]"
 
 # Run tests
 pytest
@@ -307,10 +336,10 @@ echo $WORKSPACE_ROOT
 ```bash
 # Verify installation
 which wsd
-python3 -c "import workspace_monitor; print(workspace_monitor.__version__)"
+~/.workspace-monitor/venv/bin/python -c "import workspace_monitor; print(workspace_monitor.__version__)"
 
 # Test hook processor
-python3 -m workspace_monitor.hooks.processor
+~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor
 ```
 
 ## Cross-IDE Compatibility

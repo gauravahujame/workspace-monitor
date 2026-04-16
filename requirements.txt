@@ -1,0 +1,10 @@
+# Workspace Monitor Dependencies
+# Install with: uv pip install -r requirements.txt
+
+# Core dependencies
+click>=8.0
+
+# Optional: Web dashboard dependencies
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-multipart>=0.0.6
