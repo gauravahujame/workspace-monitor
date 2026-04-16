@@ -1,15 +1,12 @@
-# Workspace Monitor Development Skill
+---
+name: workspace-monitor-dev
+description: Development of workspace-monitor cross-IDE dashboard system. TRIGGERS - workspace-monitor, wsd, dashboard, IDE integration, Windsurf, OpenCode.
+allowed-tools: Read, Edit, Bash
+---
 
-This skill provides specialized assistance for developing the workspace-monitor project.
+# Workspace Monitor Development
 
-## Project Context
-
-Workspace Monitor is a cross-IDE dashboard system that:
-- Monitors git repositories under `~/workspace`
-- Integrates with Windsurf (shell hooks) and OpenCode (TypeScript plugin)
-- Uses SQLite for unified data storage
-- Provides web dashboard and CLI tool (`wsd`)
-- Uses UV for fast Python package management
+> **Self-Evolving Skill**: This skill improves through use. If instructions are wrong, parameters drifted, or a workaround was needed — fix this file immediately, don't defer. Only update for real, reproducible issues.
 
 ## When to Use This Skill
 
@@ -21,155 +18,22 @@ Use this skill when:
 - Updating CLI commands
 - Working on web dashboard
 - Integrating with Windsurf or OpenCode
+- Setting up development environment
 
-## Architecture Overview
+## Architecture
 
-```
-src/workspace_monitor/
-├── core.py              # Database, project scanning, git analysis
-├── cli.py               # CLI commands (wsd)
-├── web/server.py        # FastAPI/Flask web dashboard
-└── hooks/processor.py   # Windsurf hook integration
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Core** | `src/workspace_monitor/core.py` | Database, project scanning, git analysis |
+| **CLI** | `src/workspace_monitor/cli.py` | Command-line interface (wsd) |
+| **Web Server** | `src/workspace_monitor/web/server.py` | FastAPI/Flask dashboard |
+| **Hooks** | `src/workspace_monitor/hooks/processor.py` | Windsurf hook integration |
+| **OpenCode Plugin** | `opencode-plugin/workspace-monitor.ts` | TypeScript plugin for OpenCode |
+| **Database** | `~/.workspace-monitor/dashboard.db` (Linux) or `~/Library/Application Support/workspace-monitor/dashboard.db` (macOS) | SQLite data store |
 
-opencode-plugin/
-└── workspace-monitor.ts # TypeScript plugin for OpenCode
-```
+---
 
-## Key Technologies
-
-- **Python 3.8+** with UV package manager (NOT pip)
-- **SQLite** with WAL mode for concurrency
-- **FastAPI/Flask** for web server
-- **Click** for CLI
-- **TypeScript** for OpenCode plugin
-- **Shell hooks** for Windsurf integration
-
-## Development Guidelines
-
-### Code Style
-
-- Use **black** for formatting (line-length: 100)
-- Use **ruff** for linting
-- Use **mypy** for type checking (strict mode)
-- All functions must have type hints
-- Use Google-style docstrings
-
-### Database Operations
-
-When modifying database schema:
-1. Update `initialize_schema()` in `core.py`
-2. Add migration logic if needed
-3. Document changes in AGENTS.md
-4. Ensure backward compatibility
-
-### Adding CLI Commands
-
-Add to `src/workspace_monitor/cli.py`:
-```python
-@cli.command()
-@click.option('--option', default='value', help='Description')
-def mycommand(option):
-    """Command description."""
-    pass
-```
-
-### Adding API Endpoints
-
-Add to `src/workspace_monitor/web/server.py`:
-```python
-@app.get("/api/endpoint")
-def endpoint():
-    return {"data": "response"}
-```
-
-### Adding IDE Support
-
-To add support for a new IDE:
-1. Create adapter in `src/workspace_monitor/ide_adapters/`
-2. Implement `IDEAdapter` interface
-3. Write to same SQLite database for unified tracking
-4. Update `docs/IDE_INTEGRATION_ANALYSIS.md`
-5. Add installation instructions to README.md
-
-## Common Patterns
-
-### Database Query Pattern
-
-```python
-def get_projects(self, status_filter: Optional[str] = None) -> List[ProjectInfo]:
-    """Get projects with optional filtering."""
-    query = "SELECT * FROM projects"
-    params = []
-    
-    if status_filter:
-        query += " WHERE git_status = ?"
-        params.append(status_filter)
-    
-    return [ProjectInfo(**row) for row in self.db.execute(query, params).fetchall()]
-```
-
-### Git Status Analysis Pattern
-
-```python
-def analyze_git_status(self, project_path: Path) -> Dict[str, Any]:
-    """Analyze git repository status."""
-    # Get branch
-    branch = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=project_path,
-        capture_output=True,
-        text=True
-    ).stdout.strip()
-    
-    # Get status
-    status = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=project_path,
-        capture_output=True,
-        text=True
-    ).stdout
-    
-    # Parse and return status info
-    return {
-        "branch": branch,
-        "dirty": len(status) > 0,
-        "changes": len(status.splitlines())
-    }
-```
-
-### Hook Processor Pattern
-
-```python
-def process_hook_event(self, event_type: str, data: Dict[str, Any]) -> None:
-    """Process Windsurf hook event."""
-    if event_type == "post_cascade_response_with_transcript":
-        self._process_transcript(data.get("transcript_path"))
-    elif event_type == "post_write_code":
-        self._refresh_project(data.get("file_path"))
-```
-
-## Platform-Specific Considerations
-
-### macOS
-- Data directory: `~/Library/Application Support/workspace-monitor/`
-- Use `platform.system() == 'Darwin'` for detection
-- Test on macOS before releasing
-
-### Linux
-- Data directory: `~/.workspace-monitor/`
-- Use `platform.system() == 'Linux'` for detection
-
-## Testing
-
-Run tests with:
-```bash
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
-pytest
-```
-
-## Installation for Development
+## 1. Development Environment Setup
 
 ```bash
 # Install UV if not present
@@ -179,45 +43,178 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/gauravahujame/workspace-monitor.git
 cd workspace-monitor
 uv venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e ".[dev,web]"
 ```
 
-## Common Issues
+---
 
-### Database Locked
-- Ensure WAL mode is enabled
-- Check for long-running transactions
-- Use connection pooling
+## 2. Run Tests
 
-### Git Status Slow
-- Limit max_depth in project scanning
-- Cache results with short TTL
-- Skip excluded directories (.git, node_modules, etc.)
+```bash
+source .venv/bin/activate
+pytest
+```
 
-### Hook Not Firing
-- Check hook command path (use absolute paths)
-- Verify hook is executable
-- Check Windsurf/OpenCode logs
+---
 
-## Documentation Updates
+## 3. Add CLI Command
 
-When making significant changes:
-1. Update AGENTS.md with decision rationale
-2. Update README.md if user-facing changes
-3. Update docs/IDE_INTEGRATION_ANALYSIS.md for IDE changes
-4. Add/update type hints for all new functions
+Add to `src/workspace_monitor/cli.py`:
 
-## Release Checklist
+```python
+@cli.command()
+@click.option('--option', default='value', help='Description')
+def mycommand(option):
+    """Command description."""
+    pass
+```
 
-Before releasing:
-- [ ] Run all tests
-- [ ] Check type hints with mypy
-- [ ] Format with black
-- [ ] Lint with ruff
-- [ ] Test on macOS (if applicable)
-- [ ] Update version in pyproject.toml
-- [ ] Update CHANGELOG.md
-- [ ] Test one-click installer
-- [ ] Test Windsurf hooks
-- [ ] Test OpenCode plugin (if changed)
+---
+
+## 4. Add API Endpoint
+
+Add to `src/workspace_monitor/web/server.py`:
+
+```python
+@app.get("/api/endpoint")
+def endpoint():
+    return {"data": "response"}
+```
+
+---
+
+## 5. Modify Database Schema
+
+```bash
+# 1. Update initialize_schema() in core.py
+# 2. Add migration logic if needed
+# 3. Document changes in AGENTS.md
+# 4. Ensure backward compatibility
+```
+
+---
+
+## 6. Add IDE Support
+
+To add support for a new IDE (e.g., Cursor):
+
+```bash
+# 1. Create adapter in src/workspace_monitor/ide_adapters/
+# 2. Implement IDEAdapter interface
+# 3. Write to same SQLite database for unified tracking
+# 4. Update docs/IDE_INTEGRATION_ANALYSIS.md
+# 5. Add installation instructions to README.md
+```
+
+---
+
+## 7. Code Quality Checks
+
+```bash
+# Format with black
+black src/
+
+# Lint with ruff
+ruff src/
+
+# Type check with mypy
+mypy src/workspace_monitor
+```
+
+---
+
+## 8. Platform-Specific Testing
+
+```bash
+# macOS
+export PLATFORM="darwin"
+# Test data directory: ~/Library/Application Support/workspace-monitor/
+
+# Linux
+export PLATFORM="linux"
+# Test data directory: ~/.workspace-monitor/
+```
+
+---
+
+## 9. Debug Hook Issues
+
+```bash
+# Check Windsurf hooks
+cat ~/.codeium/windsurf/hooks.json
+
+# Test hook processor
+~/.workspace-monitor/venv/bin/python -m workspace_monitor.hooks.processor
+
+# Check logs
+cat ~/.workspace-monitor/hook_errors.log  # Linux
+cat ~/Library/Application\ Support/workspace-monitor/hook_errors.log  # macOS
+```
+
+---
+
+## 10. Release Preparation
+
+```bash
+# 1. Run all tests
+pytest
+
+# 2. Check type hints
+mypy src/workspace_monitor
+
+# 3. Format code
+black src/
+
+# 4. Lint
+ruff src/
+
+# 5. Update version in pyproject.toml
+
+# 6. Update CHANGELOG.md
+
+# 7. Test one-click installer
+./install.sh
+
+# 8. Test Windsurf hooks
+
+# 9. Test OpenCode plugin (if changed)
+```
+
+---
+
+## Reference
+
+- [Database Schema](./references/database-schema.md) - Complete table definitions and relationships
+- [Code Patterns](./references/code-patterns.md) - Common patterns for database queries, git analysis, hooks
+- [IDE Integration Guide](./references/ide-integration.md) - How to add support for new IDEs
+- [Architecture](./references/architecture.md) - Detailed system architecture
+
+**Project docs**: [AGENTS.md](../../../AGENTS.md), [README.md](../../../README.md)
+
+---
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Database locked | WAL mode not enabled, long transactions | Ensure WAL mode in `initialize_schema()`, check for long-running queries |
+| Git status slow | Deep scanning, no caching | Limit `max_depth`, cache results with short TTL, skip excluded dirs |
+| Hook not firing | Wrong path, not executable | Use absolute path to venv python, check file permissions |
+| Type errors | Missing type hints | Run mypy, add type hints to all functions |
+| UV not found | Not installed | Run `curl -LsSf https://astral.sh/uv/install.sh | sh` |
+| Import errors | Virtual environment not activated | Run `source .venv/bin/activate` |
+| Port 8765 in use | Another instance running | Kill existing process or use `wsd server --port 8766` |
+| Projects not showing | Wrong workspace path | Check `WORKSPACE_ROOT` env var or pass `--workspace` flag |
+
+---
+
+## Post-Execution Reflection
+
+After this skill completes, check before closing:
+
+1. **Did the command succeed?** — If not, fix the instruction or error table that caused the failure.
+2. **Did parameters or output change?** — If the underlying tool's interface drifted, update Usage examples and Parameters table to match.
+3. **Was a workaround needed?** — If you had to improvise (different flags, extra steps), update this SKILL.md so the next invocation doesn't need the same workaround.
+
+Only update if the issue is real and reproducible — not speculative.
