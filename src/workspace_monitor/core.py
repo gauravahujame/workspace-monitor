@@ -34,13 +34,13 @@ class ProjectInfo:
     todos_done: int = 0
     tags: List[str] = field(default_factory=list)
     language: str = ""
-    
+
     def __post_init__(self) -> None:
         if isinstance(self.last_commit_time, str):
             self.last_commit_time = datetime.fromisoformat(self.last_commit_time)
         if isinstance(self.last_chat_time, str):
             self.last_chat_time = datetime.fromisoformat(self.last_chat_time)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         data['last_commit_time'] = self.last_commit_time.isoformat() if self.last_commit_time else None
@@ -58,7 +58,7 @@ class ChatEntry:
     commands_run: int = 0
     transcript_path: Optional[str] = None
     summary: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         data['timestamp'] = self.timestamp.isoformat()
@@ -74,7 +74,7 @@ class GitAction:
     files_changed: int = 0
     insertions: int = 0
     deletions: int = 0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         data['timestamp'] = self.timestamp.isoformat()
@@ -83,18 +83,18 @@ class GitAction:
 
 class WorkspaceDashboard:
     """Main dashboard class for workspace monitoring."""
-    
+
     def __init__(self, workspace_root: Optional[Union[str, Path]] = None,
                  data_dir: Optional[Union[str, Path]] = None) -> None:
         """
         Initialize the workspace dashboard.
-        
+
         Args:
             workspace_root: Root directory to scan for projects (default: ~/workspace)
             data_dir: Directory to store dashboard data (default: ~/.workspace-monitor)
         """
         self.workspace_root = Path(workspace_root) if workspace_root else Path.home() / "workspace"
-        
+
         if data_dir:
             self.data_dir = Path(data_dir)
         else:
@@ -103,12 +103,12 @@ class WorkspaceDashboard:
                 self.data_dir = Path.home() / "Library" / "Application Support" / "workspace-monitor"
             else:  # Linux and others
                 self.data_dir = Path.home() / ".workspace-monitor"
-        
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / "dashboard.db"
         self.lock = Lock()
         self._init_db()
-    
+
     def _init_db(self) -> None:
         """Initialize SQLite database with required tables."""
         with sqlite3.connect(self.db_path) as conn:
@@ -132,7 +132,7 @@ class WorkspaceDashboard:
                     language TEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS chats (
                     trajectory_id TEXT PRIMARY KEY,
                     project_path TEXT,
@@ -144,7 +144,7 @@ class WorkspaceDashboard:
                     summary TEXT,
                     FOREIGN KEY (project_path) REFERENCES projects(path)
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS git_actions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_path TEXT,
@@ -156,7 +156,7 @@ class WorkspaceDashboard:
                     deletions INTEGER DEFAULT 0,
                     FOREIGN KEY (project_path) REFERENCES projects(path)
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS windsurf_sessions (
                     trajectory_id TEXT PRIMARY KEY,
                     project_path TEXT,
@@ -165,68 +165,68 @@ class WorkspaceDashboard:
                     is_active BOOLEAN DEFAULT 1,
                     FOREIGN KEY (project_path) REFERENCES projects(path)
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(git_status);
                 CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_path);
                 CREATE INDEX IF NOT EXISTS idx_chats_time ON chats(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_git_actions_project ON git_actions(project_path);
                 CREATE INDEX IF NOT EXISTS idx_git_actions_time ON git_actions(timestamp);
             """)
-    
+
     def scan_projects(self, max_depth: int = 3) -> List[ProjectInfo]:
         """
         Scan workspace for all git repositories.
-        
+
         Args:
             max_depth: Maximum directory depth to search
-            
+
         Returns:
             List of ProjectInfo objects
         """
-        projects = []
-        
+        projects: List[ProjectInfo] = []
+
         if not self.workspace_root.exists():
             return projects
-        
+
         try:
             result = subprocess.run(
-                ["find", str(self.workspace_root), "-maxdepth", str(max_depth), 
+                ["find", str(self.workspace_root), "-maxdepth", str(max_depth),
                  "-type", "d", "-name", ".git"],
                 capture_output=True,
                 text=True,
                 timeout=60
             )
-            
+
             for line in result.stdout.strip().split("\n"):
                 if not line:
                     continue
-                    
+
                 git_dir = Path(line)
                 project_path = git_dir.parent
-                
+
                 project_info = self._analyze_project(project_path)
                 if project_info:
                     projects.append(project_info)
                     self._save_project(project_info)
-                    
+
         except subprocess.TimeoutExpired:
             print("Warning: Project scan timed out")
         except Exception as e:
             print(f"Error scanning projects: {e}")
-        
+
         return projects
-    
+
     def _analyze_project(self, path: Path) -> Optional[ProjectInfo]:
         """Analyze a single project and return its info."""
         if not (path / ".git").exists():
             return None
-        
+
         name = path.name
         info = ProjectInfo(path=str(path), name=name)
-        
+
         # Detect primary language
         info.language = self._detect_language(path)
-        
+
         # Get git info
         try:
             # Current branch
@@ -237,7 +237,7 @@ class WorkspaceDashboard:
                 timeout=5
             )
             info.git_branch = result.stdout.strip()
-            
+
             # Last commit
             result = subprocess.run(
                 ["git", "-C", str(path), "log", "-1", "--format=%H|%ci|%s"],
@@ -252,7 +252,7 @@ class WorkspaceDashboard:
                     info.last_commit_time = datetime.fromisoformat(
                         parts[1].replace(" ", "T").replace("Z", "+00:00")
                     )
-            
+
             # Check status
             result = subprocess.run(
                 ["git", "-C", str(path), "status", "--porcelain"],
@@ -262,10 +262,10 @@ class WorkspaceDashboard:
             )
             uncommitted = len([l for l in result.stdout.strip().split("\n") if l.strip()])
             info.uncommitted_files = uncommitted
-            
+
             # Check ahead/behind
             result = subprocess.run(
-                ["git", "-C", str(path), "rev-list", "--left-right", "--count", 
+                ["git", "-C", str(path), "rev-list", "--left-right", "--count",
                  f"HEAD...origin/{info.git_branch}"],
                 capture_output=True,
                 text=True,
@@ -276,7 +276,7 @@ class WorkspaceDashboard:
                 if len(counts) == 2:
                     info.commits_behind = int(counts[1])
                     info.commits_ahead = int(counts[0])
-            
+
             # Determine status
             if info.commits_ahead > 0 and info.commits_behind > 0:
                 info.git_status = "diverged"
@@ -288,13 +288,13 @@ class WorkspaceDashboard:
                 info.git_status = "dirty"
             else:
                 info.git_status = "clean"
-                
+
         except Exception as e:
             pass  # Git commands may fail for various reasons
-        
+
         # Check for windsurf/cascade sessions
         info.is_windsurf_open = self._check_windsurf_session(path)
-        
+
         # Load chat count from db
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
@@ -306,9 +306,9 @@ class WorkspaceDashboard:
                 info.total_chats = row[0] or 0
                 if row[1]:
                     info.last_chat_time = datetime.fromisoformat(row[1])
-        
+
         return info
-    
+
     def _detect_language(self, path: Path) -> str:
         """Detect primary language of project."""
         language_files = {
@@ -322,20 +322,20 @@ class WorkspaceDashboard:
             "PHP": ["composer.json", "composer.lock"],
             "Docker": ["Dockerfile", "docker-compose.yml", "compose.yaml"],
         }
-        
+
         for lang, files in language_files.items():
             for file in files:
                 if (path / file).exists():
                     return lang
-        
+
         # Check file extensions
         ext_counts: Dict[str, int] = {}
         try:
-            for file in path.iterdir():
-                if file.is_file():
-                    ext = file.suffix.lower()
+            for entry in path.iterdir():
+                if entry.is_file():
+                    ext = entry.suffix.lower()
                     ext_counts[ext] = ext_counts.get(ext, 0) + 1
-            
+
             ext_to_lang = {
                 ".py": "Python",
                 ".js": "JavaScript",
@@ -349,21 +349,21 @@ class WorkspaceDashboard:
                 ".c": "C",
                 ".h": "C/C++",
             }
-            
+
             for ext, count in sorted(ext_counts.items(), key=lambda x: -x[1]):
                 if ext in ext_to_lang:
                     return ext_to_lang[ext]
         except:
             pass
-        
+
         return "Unknown"
-    
+
     def _check_windsurf_session(self, path: Path) -> bool:
         """Check if Windsurf has an active session for this project."""
         transcripts_dir = Path.home() / ".windsurf" / "transcripts"
         if not transcripts_dir.exists():
             return False
-        
+
         try:
             cutoff = datetime.now() - timedelta(hours=1)
             for transcript_file in transcripts_dir.glob("*.jsonl"):
@@ -377,9 +377,9 @@ class WorkspaceDashboard:
                         pass
         except:
             pass
-        
+
         return False
-    
+
     def _save_project(self, project: ProjectInfo) -> None:
         """Save project info to database."""
         with self.lock:
@@ -398,7 +398,7 @@ class WorkspaceDashboard:
                     project.todos_count, project.todos_done, json.dumps(project.tags),
                     project.language
                 ))
-    
+
     def record_chat(self, entry: ChatEntry) -> None:
         """Record a chat session."""
         with self.lock:
@@ -413,15 +413,15 @@ class WorkspaceDashboard:
                     entry.message_count, entry.file_edits, entry.commands_run,
                     entry.transcript_path, entry.summary
                 ))
-                
+
                 conn.execute("""
-                    UPDATE projects SET 
+                    UPDATE projects SET
                         total_chats = (SELECT COUNT(*) FROM chats WHERE project_path = ?),
                         last_chat_time = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE path = ?
                 """, (entry.project_path, entry.timestamp, entry.project_path))
-    
+
     def record_git_action(self, action: GitAction) -> None:
         """Record a git action."""
         with self.lock:
@@ -435,24 +435,24 @@ class WorkspaceDashboard:
                     action.project_path, action.action_type, action.timestamp,
                     action.details, action.files_changed, action.insertions, action.deletions
                 ))
-    
-    def get_projects(self, status_filter: Optional[str] = None, 
+
+    def get_projects(self, status_filter: Optional[str] = None,
                      sort_by: str = "last_commit_time",
                      search: Optional[str] = None) -> List[ProjectInfo]:
         """Get all projects with optional filtering."""
         with sqlite3.connect(self.db_path) as conn:
             query = "SELECT * FROM projects WHERE 1=1"
             params: List[Any] = []
-            
+
             if status_filter:
                 query += " AND git_status = ?"
                 params.append(status_filter)
-            
+
             if search:
                 query += " AND (name LIKE ? OR path LIKE ? OR language LIKE ?)"
                 search_pattern = f"%{search}%"
                 params.extend([search_pattern, search_pattern, search_pattern])
-            
+
             sort_column = {
                 "name": "name",
                 "status": "git_status",
@@ -460,12 +460,12 @@ class WorkspaceDashboard:
                 "chats": "total_chats",
                 "language": "language",
             }.get(sort_by, "last_commit_time")
-            
+
             query += f" ORDER BY {sort_column} DESC NULLS LAST"
-            
+
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
-            
+
             projects = []
             for row in rows:
                 project = ProjectInfo(
@@ -487,26 +487,26 @@ class WorkspaceDashboard:
                     language=row[15]
                 )
                 projects.append(project)
-            
+
             return projects
-    
-    def get_chats(self, project_path: Optional[str] = None, 
+
+    def get_chats(self, project_path: Optional[str] = None,
                   limit: int = 100) -> List[ChatEntry]:
         """Get chat history."""
         with sqlite3.connect(self.db_path) as conn:
             query = "SELECT * FROM chats"
             params: List[Any] = []
-            
+
             if project_path:
                 query += " WHERE project_path = ?"
                 params.append(project_path)
-            
+
             query += " ORDER BY timestamp DESC LIMIT ?"
             params.append(limit)
-            
+
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
-            
+
             chats = []
             for row in rows:
                 chat = ChatEntry(
@@ -520,9 +520,9 @@ class WorkspaceDashboard:
                     summary=row[7]
                 )
                 chats.append(chat)
-            
+
             return chats
-    
+
     def get_git_actions(self, project_path: Optional[str] = None,
                         action_type: Optional[str] = None,
                         limit: int = 100) -> List[GitAction]:
@@ -530,21 +530,21 @@ class WorkspaceDashboard:
         with sqlite3.connect(self.db_path) as conn:
             query = "SELECT * FROM git_actions WHERE 1=1"
             params: List[Any] = []
-            
+
             if project_path:
                 query += " AND project_path = ?"
                 params.append(project_path)
-            
+
             if action_type:
                 query += " AND action_type = ?"
                 params.append(action_type)
-            
+
             query += " ORDER BY timestamp DESC LIMIT ?"
             params.append(limit)
-            
+
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
-            
+
             actions = []
             for row in rows:
                 action = GitAction(
@@ -557,28 +557,28 @@ class WorkspaceDashboard:
                     deletions=row[7]
                 )
                 actions.append(action)
-            
+
             return actions
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get dashboard statistics."""
         with sqlite3.connect(self.db_path) as conn:
             stats: Dict[str, Any] = {}
-            
+
             # Project counts by status
             cursor = conn.execute("""
                 SELECT git_status, COUNT(*) FROM projects GROUP BY git_status
             """)
             stats['status_counts'] = dict(cursor.fetchall())
-            
+
             # Total projects
             cursor = conn.execute("SELECT COUNT(*) FROM projects")
             stats['total_projects'] = cursor.fetchone()[0]
-            
+
             # Active windsurf sessions
             cursor = conn.execute("SELECT COUNT(*) FROM projects WHERE is_windsurf_open = 1")
             stats['active_sessions'] = cursor.fetchone()[0]
-            
+
             # Total chats today
             today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             cursor = conn.execute(
@@ -586,21 +586,21 @@ class WorkspaceDashboard:
                 (today.isoformat(),)
             )
             stats['chats_today'] = cursor.fetchone()[0]
-            
+
             # Total chats
             cursor = conn.execute("SELECT COUNT(*) FROM chats")
             stats['total_chats'] = cursor.fetchone()[0]
-            
+
             # Language distribution
             cursor = conn.execute("""
-                SELECT language, COUNT(*) FROM projects 
-                WHERE language != 'Unknown' 
+                SELECT language, COUNT(*) FROM projects
+                WHERE language != 'Unknown'
                 GROUP BY language ORDER BY COUNT(*) DESC
             """)
             stats['languages'] = dict(cursor.fetchall())
-            
+
             return stats
-    
+
     def export_data(self, output_path: Optional[Union[str, Path]] = None) -> str:
         """Export all dashboard data to JSON."""
         if output_path is None:
@@ -608,15 +608,15 @@ class WorkspaceDashboard:
             output_path = self.data_dir / f"export_{timestamp}.json"
         else:
             output_path = Path(output_path)
-        
+
         data = {
             "exported_at": datetime.now().isoformat(),
             "projects": [p.to_dict() for p in self.get_projects()],
             "chats": [c.to_dict() for c in self.get_chats(limit=10000)],
             "stats": self.get_stats()
         }
-        
+
         with open(output_path, 'w') as f:
             json.dump(data, f, indent=2)
-        
+
         return str(output_path)

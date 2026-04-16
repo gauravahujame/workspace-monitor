@@ -255,7 +255,7 @@ def chats(ctx: click.Context, limit: int) -> None:
 
 
 @cli.command()
-@click.option('--host', default='127.0.0.1', help='Host to bind to')
+@click.option('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0 for external access)')
 @click.option('--port', '-p', default=8765, help='Port to bind to')
 @click.option('--no-browser', is_flag=True, help='Do not open browser')
 def server(host: str, port: int, no_browser: bool) -> None:

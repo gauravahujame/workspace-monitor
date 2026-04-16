@@ -33,8 +33,8 @@ from ..core import WorkspaceDashboard, ProjectInfo
 
 class DashboardServer:
     """Web dashboard server for workspace monitor."""
-    
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765,
+
+    def __init__(self, host: str = "0.0.0.0", port: int = 8765,
                  dashboard: Optional[WorkspaceDashboard] = None) -> None:
         self.host = host
         self.port = port
@@ -42,16 +42,16 @@ class DashboardServer:
         self.app = self._create_app()
         self.websocket_clients: set = set() if USE_FASTAPI else set()
         self._setup_routes()
-        
+
         # Start background scanner
         self.scanner_thread = threading.Thread(target=self._background_scanner, daemon=True)
         self.scanner_thread.start()
-    
+
     def _create_app(self) -> Any:
         """Create the web application."""
         if USE_FASTAPI:
             app = FastAPI(title="Workspace Monitor", version="1.0.0")
-            
+
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
@@ -59,26 +59,26 @@ class DashboardServer:
                 allow_methods=["*"],
                 allow_headers=["*"],
             )
-            
+
             return app
         else:
             app = Flask(__name__)
             return app
-    
+
     def _setup_routes(self) -> None:
         """Setup URL routes."""
         if USE_FASTAPI:
             self._setup_fastapi_routes()
         else:
             self._setup_flask_routes()
-    
+
     def _setup_fastapi_routes(self) -> None:
         """Setup FastAPI routes."""
-        
+
         @self.app.get("/", response_class=HTMLResponse)
         async def root() -> str:
             return self._get_dashboard_html()
-        
+
         @self.app.get("/api/projects")
         async def api_projects(
             status: Optional[str] = Query(None),
@@ -91,48 +91,48 @@ class DashboardServer:
                 search=search
             )
             return JSONResponse(content=[p.to_dict() for p in projects])
-        
+
         @self.app.get("/api/projects/{project_path:path}")
         async def api_project_detail(project_path: str) -> JSONResponse:
             project_path = project_path.replace("%20", " ")
             full_path = str(self.dashboard.workspace_root / project_path)
-            
+
             projects = self.dashboard.get_projects()
             project = next((p for p in projects if p.path == full_path), None)
-            
+
             if not project:
                 return JSONResponse(content={"error": "Project not found"}, status_code=404)
-            
+
             chats = self.dashboard.get_chats(project_path=full_path, limit=50)
             git_actions = self.dashboard.get_git_actions(project_path=full_path, limit=50)
-            
+
             return JSONResponse(content={
                 "project": project.to_dict(),
                 "chats": [c.to_dict() for c in chats],
                 "git_actions": [a.to_dict() for a in git_actions]
             })
-        
+
         @self.app.get("/api/stats")
         async def api_stats() -> JSONResponse:
             stats = self.dashboard.get_stats()
             return JSONResponse(content=stats)
-        
+
         @self.app.get("/api/chats")
         async def api_chats(limit: int = Query(100)) -> JSONResponse:
             chats = self.dashboard.get_chats(limit=limit)
             return JSONResponse(content=[c.to_dict() for c in chats])
-        
+
         @self.app.get("/api/activity")
         async def api_activity(days: int = Query(7)) -> JSONResponse:
             activity = self._get_activity_timeline(days)
             return JSONResponse(content=activity)
-        
+
         @self.app.post("/api/refresh")
         async def api_refresh() -> JSONResponse:
             self.dashboard.scan_projects()
             await self._broadcast_update()
             return JSONResponse(content={"status": "ok"})
-        
+
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.accept()
@@ -147,77 +147,77 @@ class DashboardServer:
                     })
             except WebSocketDisconnect:
                 self.websocket_clients.discard(websocket)
-    
+
     def _setup_flask_routes(self) -> None:
         """Setup Flask routes."""
-        
+
         @self.app.route("/")
         def root() -> str:
             return self._get_dashboard_html()
-        
+
         @self.app.route("/api/projects")
         def api_projects() -> Any:
             status = request.args.get("status")
             sort = request.args.get("sort", "last_commit_time")
             search = request.args.get("search")
-            
+
             projects = self.dashboard.get_projects(
                 status_filter=status,
                 sort_by=sort,
                 search=search
             )
             return jsonify([p.to_dict() for p in projects])
-        
+
         @self.app.route("/api/projects/<path:project_path>")
         def api_project_detail(project_path: str) -> Any:
             full_path = str(self.dashboard.workspace_root / project_path)
-            
+
             projects = self.dashboard.get_projects()
             project = next((p for p in projects if p.path == full_path), None)
-            
+
             if not project:
                 return jsonify({"error": "Project not found"}), 404
-            
+
             chats = self.dashboard.get_chats(project_path=full_path, limit=50)
             git_actions = self.dashboard.get_git_actions(project_path=full_path, limit=50)
-            
+
             return jsonify({
                 "project": project.to_dict(),
                 "chats": [c.to_dict() for c in chats],
                 "git_actions": [a.to_dict() for a in git_actions]
             })
-        
+
         @self.app.route("/api/stats")
         def api_stats() -> Any:
             stats = self.dashboard.get_stats()
             return jsonify(stats)
-        
+
         @self.app.route("/api/chats")
         def api_chats() -> Any:
             limit = request.args.get("limit", 100, type=int)
             chats = self.dashboard.get_chats(limit=limit)
             return jsonify([c.to_dict() for c in chats])
-        
+
         @self.app.route("/api/activity")
         def api_activity() -> Any:
             days = request.args.get("days", 7, type=int)
             activity = self._get_activity_timeline(days)
             return jsonify(activity)
-        
+
         @self.app.route("/api/refresh", methods=["POST"])
         def api_refresh() -> Any:
             self.dashboard.scan_projects()
             return jsonify({"status": "ok"})
-    
+
     def _get_activity_timeline(self, days: int = 7) -> List[Dict[str, Any]]:
         """Get activity timeline for the last N days."""
         db_path = self.dashboard.db_path
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         timeline = []
-        
+
         with sqlite3.connect(db_path) as conn:
             cursor = conn.execute("""
                 SELECT DATE(timestamp) as date, COUNT(*) as count
@@ -226,9 +226,9 @@ class DashboardServer:
                 GROUP BY DATE(timestamp)
                 ORDER BY date
             """, (start_date.isoformat(),))
-            
+
             chat_counts = {row[0]: row[1] for row in cursor.fetchall()}
-            
+
             cursor = conn.execute("""
                 SELECT DATE(timestamp) as date, action_type, COUNT(*) as count
                 FROM git_actions
@@ -236,14 +236,14 @@ class DashboardServer:
                 GROUP BY DATE(timestamp), action_type
                 ORDER BY date
             """, (start_date.isoformat(),))
-            
+
             git_counts: Dict[str, Dict[str, int]] = {}
             for row in cursor.fetchall():
                 date, action, count = row
                 if date not in git_counts:
                     git_counts[date] = {}
                 git_counts[date][action] = count
-            
+
             current = start_date
             while current <= end_date:
                 date_str = current.strftime("%Y-%m-%d")
@@ -254,9 +254,9 @@ class DashboardServer:
                     "total_commits": git_counts.get(date_str, {}).get("commit", 0)
                 })
                 current += timedelta(days=1)
-        
+
         return timeline
-    
+
     async def _broadcast_update(self) -> None:
         """Broadcast update to all connected WebSocket clients."""
         if USE_FASTAPI and self.websocket_clients:
@@ -265,31 +265,31 @@ class DashboardServer:
                 "type": "refresh",
                 "data": stats
             }
-            
+
             disconnected = set()
             for client in self.websocket_clients:
                 try:
                     await client.send_json(message)
                 except:
                     disconnected.add(client)
-            
+
             self.websocket_clients -= disconnected
-    
+
     def _background_scanner(self) -> None:
         """Background thread to periodically scan projects."""
         import time
-        
+
         while True:
             try:
                 time.sleep(300)  # 5 minutes
                 self.dashboard.scan_projects()
-                
+
                 if USE_FASTAPI and self.websocket_clients:
                     asyncio.run(self._broadcast_update())
-                    
+
             except Exception as e:
                 print(f"Background scanner error: {e}")
-    
+
     def _get_dashboard_html(self) -> str:
         """Generate the main dashboard HTML."""
         return """<!DOCTYPE html>
@@ -455,7 +455,7 @@ class DashboardServer:
                 <span id="last-updated">Last updated: --</span>
             </div>
         </header>
-        
+
         <div class="stats-grid" id="stats-container">
             <div class="stat-card">
                 <div class="stat-value" id="total-projects">--</div>
@@ -478,11 +478,11 @@ class DashboardServer:
                 <div class="stat-label">Need Attention</div>
             </div>
         </div>
-        
+
         <div class="activity-chart" id="activity-chart">
             <div class="loading">Loading activity data...</div>
         </div>
-        
+
         <div class="controls">
             <input type="text" id="search-input" placeholder="🔍 Search projects...">
             <select id="status-filter">
@@ -503,7 +503,7 @@ class DashboardServer:
             <button onclick="refreshData()">🔄 Refresh</button>
             <button onclick="exportData()">📥 Export</button>
         </div>
-        
+
         <table class="projects-table">
             <thead>
                 <tr>
@@ -521,44 +521,44 @@ class DashboardServer:
             </tbody>
         </table>
     </div>
-    
+
     <script>
         let projects = [];
         let ws = null;
-        
+
         async function fetchStats() {
             try {
                 const res = await fetch('/api/stats');
                 const stats = await res.json();
-                
+
                 document.getElementById('total-projects').textContent = stats.total_projects || 0;
                 document.getElementById('active-sessions').textContent = stats.active_sessions || 0;
                 document.getElementById('chats-today').textContent = stats.chats_today || 0;
                 document.getElementById('total-chats').textContent = stats.total_chats || 0;
-                
-                const needsAttention = (stats.status_counts?.dirty || 0) + 
+
+                const needsAttention = (stats.status_counts?.dirty || 0) +
                                       (stats.status_counts?.ahead || 0) +
                                       (stats.status_counts?.behind || 0) +
                                       (stats.status_counts?.diverged || 0);
                 document.getElementById('needs-attention').textContent = needsAttention;
-                
-                document.getElementById('last-updated').textContent = 
+
+                document.getElementById('last-updated').textContent =
                     'Last updated: ' + new Date().toLocaleTimeString();
             } catch (e) {
                 console.error('Error fetching stats:', e);
             }
         }
-        
+
         async function fetchActivity() {
             try {
                 const res = await fetch('/api/activity?days=14');
                 const data = await res.json();
-                
+
                 const chart = document.getElementById('activity-chart');
                 chart.innerHTML = '';
-                
+
                 const maxVal = Math.max(...data.map(d => d.chats), 1);
-                
+
                 data.forEach(day => {
                     const bar = document.createElement('div');
                     bar.className = 'chart-bar';
@@ -571,34 +571,34 @@ class DashboardServer:
                 console.error('Error fetching activity:', e);
             }
         }
-        
+
         async function fetchProjects() {
             try {
                 const search = document.getElementById('search-input').value;
                 const status = document.getElementById('status-filter').value;
                 const sort = document.getElementById('sort-by').value;
-                
+
                 let url = `/api/projects?sort=${sort}`;
                 if (status) url += `&status=${status}`;
                 if (search) url += `&search=${encodeURIComponent(search)}`;
-                
+
                 const res = await fetch(url);
                 projects = await res.json();
-                
+
                 renderProjects();
             } catch (e) {
                 console.error('Error fetching projects:', e);
             }
         }
-        
+
         function renderProjects() {
             const tbody = document.getElementById('projects-tbody');
-            
+
             if (projects.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="loading">No projects found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = projects.map(p => {
                 const statusClass = `status-${p.git_status}`;
                 const statusText = p.git_status === 'clean' ? '✓ Clean' :
@@ -606,10 +606,10 @@ class DashboardServer:
                                   p.git_status === 'ahead' ? `↑ ${p.commits_ahead} ahead` :
                                   p.git_status === 'behind' ? `↓ ${p.commits_behind} behind` :
                                   p.git_status === 'diverged' ? '⚠ Diverged' : p.git_status;
-                
-                const timeAgo = p.last_commit_time ? 
+
+                const timeAgo = p.last_commit_time ?
                     timeSince(new Date(p.last_commit_time)) : 'Never';
-                
+
                 return `<tr>
                     <td><strong>${escapeHtml(p.name)}</strong><br>
                         <small style="color:#8b949e">${escapeHtml(p.path)}</small></td>
@@ -622,7 +622,7 @@ class DashboardServer:
                 </tr>`;
             }).join('');
         }
-        
+
         function timeSince(date) {
             const seconds = Math.floor((new Date() - date) / 1000);
             const intervals = {
@@ -633,7 +633,7 @@ class DashboardServer:
                 hour: 3600,
                 minute: 60
             };
-            
+
             for (const [unit, secondsInUnit] of Object.entries(intervals)) {
                 const interval = Math.floor(seconds / secondsInUnit);
                 if (interval >= 1) {
@@ -642,26 +642,26 @@ class DashboardServer:
             }
             return 'Just now';
         }
-        
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
+
         async function refreshData() {
             await fetch('/api/refresh', { method: 'POST' });
             await Promise.all([fetchStats(), fetchActivity(), fetchProjects()]);
         }
-        
+
         function exportData() {
             window.open('/api/export', '_blank');
         }
-        
+
         function connectWebSocket() {
             const wsUrl = `ws://${window.location.host}/ws`;
             ws = new WebSocket(wsUrl);
-            
+
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 if (msg.type === 'refresh' || msg.type === 'stats_update') {
@@ -669,17 +669,17 @@ class DashboardServer:
                     fetchProjects();
                 }
             };
-            
+
             ws.onclose = () => {
                 setTimeout(connectWebSocket, 5000);
             };
         }
-        
-        document.getElementById('search-input').addEventListener('input', 
+
+        document.getElementById('search-input').addEventListener('input',
             debounce(fetchProjects, 300));
         document.getElementById('status-filter').addEventListener('change', fetchProjects);
         document.getElementById('sort-by').addEventListener('change', fetchProjects);
-        
+
         function debounce(fn, ms) {
             let timeout;
             return function(...args) {
@@ -687,14 +687,14 @@ class DashboardServer:
                 timeout = setTimeout(() => fn.apply(this, args), ms);
             };
         }
-        
+
         Promise.all([fetchStats(), fetchActivity(), fetchProjects()]);
-        
+
         setInterval(() => {
             fetchStats();
             fetchProjects();
         }, 30000);
-        
+
         if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
             connectWebSocket();
         }
@@ -706,18 +706,18 @@ class DashboardServer:
     def run(self) -> None:
         """Start the server."""
         print(f"🚀 Starting Workspace Monitor at http://{self.host}:{self.port}")
-        
+
         if USE_FASTAPI:
             uvicorn.run(self.app, host=self.host, port=self.port)
         else:
             self.app.run(host=self.host, port=self.port, debug=False)
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8765, 
+def run_server(host: str = "127.0.0.1", port: int = 8765,
                open_browser: bool = True) -> None:
     """Run the dashboard server."""
     if open_browser:
         webbrowser.open(f"http://{host}:{port}")
-    
+
     server = DashboardServer(host=host, port=port)
     server.run()
