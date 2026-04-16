@@ -66,7 +66,16 @@ echo ""
 echo "Virtual environment: $VENV_DIR"
 echo "Add to PATH: export PATH=\"$HOME/.local/bin:\$PATH\""
 echo ""
-echo "For Windsurf integration, add to ~/.codeium/windsurf/hooks.json:"
-echo '  "post_cascade_response_with_transcript": [{"command": "'"$VENV_DIR/bin/python"' -m workspace_monitor.hooks.processor", "show_output": false}]'
+echo "📦 IDE Integration:"
 echo ""
-echo "For OpenCode integration, see: opencode-plugin/README.md"
+echo "Windsurf integration:"
+echo '  Add to ~/.codeium/windsurf/hooks.json:'
+echo '    "post_cascade_response_with_transcript": [{"command": "'"$VENV_DIR/bin/python"' -m workspace_monitor.hooks.processor", "show_output": false}]'
+echo ""
+echo "OpenCode integration:"
+echo "  mkdir -p ~/.config/opencode/plugins"
+echo "  cp opencode-plugin/workspace-monitor.ts ~/.config/opencode/plugins/"
+echo "  Add to ~/.config/opencode/opencode.jsonc:"
+echo '    "plugins": ["~/.config/opencode/plugins/workspace-monitor.ts"]'
+echo ""
+echo "See opencode-plugin/README.md for detailed OpenCode setup."
